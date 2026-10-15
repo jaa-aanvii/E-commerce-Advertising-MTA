@@ -12,9 +12,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import coalition_value
-from coalition_generator import generate_coalitions, save_coalitions
-from coalition_value import (
+import shapley_engine.coalition_value
+from shapley_engine import coalition_value
+from shapley_engine.coalition_generator import generate_coalitions, save_coalitions
+from shapley_engine.coalition_value import (
     CoalitionValueError,
     build_and_save,
     calculate_all_coalition_values,
@@ -57,7 +58,7 @@ def model_P(paths):
 
 def full_table(channels):
     """coalitions.csv-shaped table straight from Task 1.1's generator (ids 0..2^N-1)."""
-    from coalition_generator import coalitions_to_frame
+    from shapley_engine.coalition_generator import coalitions_to_frame
     return coalitions_to_frame(generate_coalitions(channels))
 
 
