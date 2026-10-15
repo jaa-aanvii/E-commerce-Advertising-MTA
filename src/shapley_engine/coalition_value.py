@@ -40,7 +40,7 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 
-from coalition_generator import (
+from shapley_engine.coalition_generator import (
     COALITION_COLUMNS,
     DEFAULT_COALITIONS_PATH,
     deserialize_coalition,
