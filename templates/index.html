@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AttributionLab — Marketing Attribution Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --surface: #fcfcfb;
+    --page: #f3f6fb;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --border: rgba(11,11,11,0.10);
+    --gridline: #e1e0d9;
+    --accent: #2a78d6;
+    --accent-dark: #184f95;
+    --accent-soft: #e8f0fb;
+    --good: #0ca30c;
+    --critical: #d03b3b;
+    --series-1: #2a78d6; /* Markov */
+    --series-2: #eb6834; /* Shapley */
+    --series-3: #1baf7a; /* Hybrid */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page);
+    color: var(--text-primary);
+  }
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+  }
+  header h1 .accent { color: var(--accent); }
+  header p {
+    margin: 4px 0 0;
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+  main {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 24px 16px 64px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+  }
+  .card h2 {
+    margin: 0 0 4px;
+    font-size: 17px;
+    font-weight: 700;
+  }
+  .card .subtitle {
+    margin: 0 0 16px;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+  .row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  input[type="file"] {
+    font-size: 14px;
+  }
+  input[type="number"] {
+    font-size: 14px;
+    padding: 8px 10px;
+    border: 1px solid var(--gridline);
+    border-radius: 6px;
+    width: 220px;
+    font-variant-numeric: tabular-nums;
+  }
+  button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 9px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: var(--accent-dark); }
+  button:disabled {
+    background: var(--gridline);
+    color: var(--text-muted);
+    cursor: not-allowed;
+  }
+  button.secondary {
+    background: var(--accent-soft);
+    color: var(--accent-dark);
+  }
+  button.secondary:hover:not(:disabled) { background: #d8e6f8; }
+  .error {
+    color: var(--critical);
+    font-size: 13px;
+    margin-top: 10px;
+    white-space: pre-wrap;
+  }
+  .hidden { display: none !important; }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-top: 18px;
+  }
+  .stat-tile {
+    background: var(--accent-soft);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .stat-tile .value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent-dark);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-tile .label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+    font-size: 13.5px;
+  }
+  th, td {
+    text-align: left;
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--gridline);
+  }
+  th {
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 12.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tfoot td {
+    font-weight: 700;
+    border-top: 2px solid var(--gridline);
+    border-bottom: none;
+  }
+  .warnings {
+    margin-top: 14px;
+    background: #fff8ec;
+    border: 1px solid #f0dca8;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12.5px;
+    color: #6b5420;
+  }
+  .warnings ul { margin: 6px 0 0; padding-left: 18px; }
+  .chart-wrap {
+    margin-top: 20px;
+    max-width: 640px;
+  }
+  .notice {
+    margin-top: 16px;
+    background: var(--accent-soft);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+  .notice ul { margin: 6px 0 0; padding-left: 18px; }
+  .results-row {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .results-row > div { flex: 1 1 360px; min-width: 0; }
+  .step-disabled-hint {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    margin-top: 8px;
+  }
+  .segment-tabs {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .seg-tab {
+    background: var(--surface);
+    color: var(--text-secondary);
+    border: 1px solid var(--gridline);
+    border-radius: 999px;
+    padding: 7px 16px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .seg-tab:hover:not(:disabled) {
+    background: var(--accent-soft);
+    color: var(--accent-dark);
+  }
+  .seg-tab.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .seg-tab:disabled {
+    background: var(--page);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="accent">Attribution</span>Lab</h1>
+  <p>Marketing Attribution Dashboard — Markov Chains &amp; Shapley Values</p>
+</header>
+
+<main>
+  <!-- A. DATASET -->
+  <section class="card">
+    <h2>A. Dataset</h2>
+    <p class="subtitle">Upload a CSV with columns: User ID, Timestamp (DD-MM-YYYY HH:MM), Channel, Campaign, Conversion (Yes/No).</p>
+    <div class="row">
+      <input type="file" id="fileInput" accept=".csv">
+      <button id="uploadBtn">Upload CSV</button>
+    </div>
+    <div class="error hidden" id="uploadError"></div>
+
+    <div id="datasetStats" class="hidden">
+      <div class="stats-grid">
+        <div class="stat-tile"><div class="value" id="statEvents">—</div><div class="label">Events (valid rows)</div></div>
+        <div class="stat-tile"><div class="value" id="statUsers">—</div><div class="label">Unique Users</div></div>
+        <div class="stat-tile"><div class="value" id="statJourneys">—</div><div class="label">Reconstructed Journeys</div></div>
+        <div class="stat-tile"><div class="value" id="statRejected">—</div><div class="label">Rejected Rows</div></div>
+      </div>
+      <div id="uploadWarnings" class="warnings hidden"></div>
+      <table id="previewTable">
+        <thead><tr id="previewHead"></tr></thead>
+        <tbody id="previewBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- B. ATTRIBUTION ANALYSIS -->
+  <section class="card">
+    <h2>B. Attribution Analysis</h2>
+    <p class="subtitle">Compares position-based heuristics (first-touch, last-touch, linear) against the project's Markov removal-effect model, Shapley-value game, and the Markov+Shapley hybrid.</p>
+    <button id="runAnalysisBtn" disabled>Run Analysis</button>
+    <div class="step-disabled-hint" id="analysisHint">Upload a dataset first.</div>
+    <div class="error hidden" id="analysisError"></div>
+
+    <div id="segmentTabs" class="segment-tabs hidden">
+      <button class="seg-tab active" data-segment="all">All Users</button>
+      <button class="seg-tab" data-segment="new">New Users</button>
+      <button class="seg-tab" data-segment="returning">Returning Users</button>
+    </div>
+    <div class="step-disabled-hint" id="segmentInfo"></div>
+
+    <div id="analysisResults" class="hidden">
+      <div class="results-row">
+        <div>
+          <table id="attributionTable">
+            <thead>
+              <tr>
+                <th>Channel</th>
+                <th class="num">First %</th>
+                <th class="num">Last %</th>
+                <th class="num">Linear %</th>
+                <th class="num">Markov %</th>
+                <th class="num">Shapley %</th>
+                <th class="num">Hybrid %</th>
+              </tr>
+            </thead>
+            <tbody id="attributionBody"></tbody>
+          </table>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="attributionChart" height="260"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- C. BUDGET ALLOCATION -->
+  <section class="card">
+    <h2>C. Budget Allocation</h2>
+    <p class="subtitle">Splits your budget by each channel's hybrid attribution weight. Contribution-based, not a guarantee of ROI.</p>
+    <div class="row">
+      <div>
+        <label for="budgetInput" style="display:block;font-size:12.5px;color:var(--text-secondary);margin-bottom:4px;">Total Budget (₹)</label>
+        <input type="number" id="budgetInput" min="0" step="1" value="1000000">
+      </div>
+      <button id="allocateBtn" disabled style="margin-top:18px;">Allocate Budget</button>
+    </div>
+    <div class="step-disabled-hint" id="budgetHint">Run the attribution analysis first.</div>
+    <div class="step-disabled-hint" id="budgetSegmentHint"></div>
+    <div class="error hidden" id="budgetError"></div>
+
+    <div id="budgetResults" class="hidden">
+      <div class="results-row">
+        <div>
+          <table id="allocationTable">
+            <thead>
+              <tr>
+                <th>Channel</th>
+                <th class="num">Attribution %</th>
+                <th class="num">Allocated (₹)</th>
+              </tr>
+            </thead>
+            <tbody id="allocationBody"></tbody>
+            <tfoot>
+              <tr>
+                <td>Total</td>
+                <td class="num"></td>
+                <td class="num" id="allocationTotal"></td>
+              </tr>
+            </tfoot>
+          </table>
+          <button class="secondary" id="downloadCsvBtn" style="margin-top:14px;">Download Allocation as CSV</button>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="allocationChart" height="260"></canvas>
+        </div>
+      </div>
+      <div class="notice" id="allocationNotice"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+let sessionToken = null;
+let attributionChart = null;
+let allocationChart = null;
+let lastAllocationRows = null;
+let analysisSegments = null;
+let currentSegment = "all";
+
+const fmtINR = (n) => "₹" + Math.round(n).toLocaleString("en-IN");
+
+function show(el) { el.classList.remove("hidden"); }
+function hide(el) { el.classList.add("hidden"); }
+
+function setError(el, message) {
+  if (message) { el.textContent = message; show(el); } else { hide(el); }
+}
+
+// ---------------- A. Upload ----------------
+document.getElementById("uploadBtn").addEventListener("click", async () => {
+  const fileInput = document.getElementById("fileInput");
+  const uploadError = document.getElementById("uploadError");
+  setError(uploadError, null);
+
+  if (!fileInput.files.length) {
+    setError(uploadError, "Choose a CSV file first.");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", fileInput.files[0]);
+
+  let resp, data;
+  try {
+    resp = await fetch("/api/upload", { method: "POST", body: formData });
+    data = await resp.json();
+  } catch (e) {
+    setError(uploadError, "Could not reach the server: " + e.message);
+    return;
+  }
+
+  if (!resp.ok) {
+    setError(uploadError, data.error || "Upload failed.");
+    return;
+  }
+
+  sessionToken = data.token;
+
+  document.getElementById("statEvents").textContent = data.stats.n_events.toLocaleString();
+  document.getElementById("statUsers").textContent = data.stats.n_users.toLocaleString();
+  document.getElementById("statJourneys").textContent = data.stats.n_journeys.toLocaleString();
+  document.getElementById("statRejected").textContent = data.stats.n_rejected.toLocaleString();
+
+  const warningsEl = document.getElementById("uploadWarnings");
+  if (data.warnings && data.warnings.length) {
+    warningsEl.innerHTML = "<strong>Rows rejected during validation:</strong><ul>" +
+      data.warnings.map(w => `<li>${w}</li>`).join("") + "</ul>";
+    show(warningsEl);
+  } else {
+    hide(warningsEl);
+  }
+
+  const headRow = document.getElementById("previewHead");
+  headRow.innerHTML = data.columns.map(c => `<th>${c}</th>`).join("");
+  const body = document.getElementById("previewBody");
+  body.innerHTML = data.preview.map(row =>
+    "<tr>" + data.columns.map(c => `<td>${row[c] ?? ""}</td>`).join("") + "</tr>"
+  ).join("");
+
+  show(document.getElementById("datasetStats"));
+
+  document.getElementById("runAnalysisBtn").disabled = false;
+  document.getElementById("analysisHint").textContent = "Dataset loaded. Click Run Analysis.";
+
+  // Reset downstream state since a new dataset invalidates previous analysis.
+  analysisSegments = null;
+  currentSegment = "all";
+  document.getElementById("allocateBtn").disabled = true;
+  document.getElementById("budgetHint").textContent = "Run the attribution analysis first.";
+  document.getElementById("budgetSegmentHint").textContent = "";
+  hide(document.getElementById("segmentTabs"));
+  document.getElementById("segmentInfo").textContent = "";
+  hide(document.getElementById("analysisResults"));
+  hide(document.getElementById("budgetResults"));
+});
+
+// ---------------- B. Run Analysis ----------------
+document.getElementById("runAnalysisBtn").addEventListener("click", async () => {
+  const analysisError = document.getElementById("analysisError");
+  setError(analysisError, null);
+
+  if (!sessionToken) {
+    setError(analysisError, "Upload a dataset first.");
+    return;
+  }
+
+  let resp, data;
+  try {
+    resp = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: sessionToken }),
+    });
+    data = await resp.json();
+  } catch (e) {
+    setError(analysisError, "Could not reach the server: " + e.message);
+    return;
+  }
+
+  if (!resp.ok) {
+    setError(analysisError, data.error || "Analysis failed.");
+    return;
+  }
+
+  analysisSegments = data.segments;
+  setupSegmentTabs();
+  renderSegment("all");
+});
+
+function setupSegmentTabs() {
+  const tabsEl = document.getElementById("segmentTabs");
+  show(tabsEl);
+  tabsEl.querySelectorAll(".seg-tab").forEach(btn => {
+    const seg = analysisSegments[btn.dataset.segment];
+    const available = seg && seg.available;
+    btn.disabled = !available;
+    btn.title = available ? "" : (seg ? seg.reason : "Not available for this dataset.");
+  });
+}
+
+function renderSegment(segKey) {
+  const seg = analysisSegments && analysisSegments[segKey];
+  if (!seg || !seg.available) return;
+
+  currentSegment = segKey;
+  document.querySelectorAll(".seg-tab").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.segment === segKey);
+  });
+
+  document.getElementById("segmentInfo").textContent =
+    `${seg.label}: ${seg.n_journeys.toLocaleString()} journeys, ${seg.n_converting.toLocaleString()} converting, ` +
+    `baseline conversion probability ${(seg.baseline_conversion_probability * 100).toFixed(2)}%.`;
+
+  const body = document.getElementById("attributionBody");
+  body.innerHTML = seg.rows.map(r => `
+    <tr>
+      <td>${r.channel}</td>
+      <td class="num">${r.first_touch_pct.toFixed(2)}%</td>
+      <td class="num">${r.last_touch_pct.toFixed(2)}%</td>
+      <td class="num">${r.linear_pct.toFixed(2)}%</td>
+      <td class="num">${r.markov_weight_pct.toFixed(2)}%</td>
+      <td class="num">${r.shapley_weight_pct.toFixed(2)}%</td>
+      <td class="num">${r.hybrid_weight_pct.toFixed(2)}%</td>
+    </tr>
+  `).join("");
+
+  show(document.getElementById("analysisResults"));
+
+  const labels = seg.rows.map(r => r.channel);
+  if (attributionChart) attributionChart.destroy();
+  attributionChart = new Chart(document.getElementById("attributionChart"), {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        { label: "First %", data: seg.rows.map(r => r.first_touch_pct), backgroundColor: "#eda100", borderRadius: 4 },
+        { label: "Last %", data: seg.rows.map(r => r.last_touch_pct), backgroundColor: "#e87ba4", borderRadius: 4 },
+        { label: "Linear %", data: seg.rows.map(r => r.linear_pct), backgroundColor: "#4a3aa7", borderRadius: 4 },
+        { label: "Markov %", data: seg.rows.map(r => r.markov_weight_pct), backgroundColor: "#2a78d6", borderRadius: 4 },
+        { label: "Shapley %", data: seg.rows.map(r => r.shapley_weight_pct), backgroundColor: "#eb6834", borderRadius: 4 },
+        { label: "Hybrid %", data: seg.rows.map(r => r.hybrid_weight_pct), backgroundColor: "#1baf7a", borderRadius: 4 },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: "bottom" } },
+      scales: { y: { beginAtZero: true, title: { display: true, text: "Attribution weight (%)" } } },
+    },
+  });
+
+  document.getElementById("allocateBtn").disabled = false;
+  document.getElementById("budgetHint").textContent = "Attribution weights ready. Enter a budget and allocate.";
+  document.getElementById("budgetSegmentHint").textContent = `Allocating for: ${seg.label}`;
+  hide(document.getElementById("budgetResults"));
+}
+
+document.querySelectorAll(".seg-tab").forEach(btn => {
+  btn.addEventListener("click", () => renderSegment(btn.dataset.segment));
+});
+
+// ---------------- C. Allocate Budget ----------------
+document.getElementById("allocateBtn").addEventListener("click", async () => {
+  const budgetError = document.getElementById("budgetError");
+  setError(budgetError, null);
+
+  if (!sessionToken) {
+    setError(budgetError, "Upload a dataset and run analysis first.");
+    return;
+  }
+
+  const budgetValue = document.getElementById("budgetInput").value;
+  const budget = Number(budgetValue);
+  if (budgetValue === "" || Number.isNaN(budget)) {
+    setError(budgetError, "Enter a valid numeric budget.");
+    return;
+  }
+
+  let resp, data;
+  try {
+    resp = await fetch("/api/allocate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: sessionToken, budget, segment: currentSegment }),
+    });
+    data = await resp.json();
+  } catch (e) {
+    setError(budgetError, "Could not reach the server: " + e.message);
+    return;
+  }
+
+  if (!resp.ok) {
+    setError(budgetError, data.error || "Allocation failed.");
+    return;
+  }
+
+  lastAllocationRows = data.rows;
+
+  const body = document.getElementById("allocationBody");
+  body.innerHTML = data.rows.map(r => `
+    <tr>
+      <td>${r.channel}</td>
+      <td class="num">${r.attribution_weight_pct.toFixed(2)}%</td>
+      <td class="num">${fmtINR(r.amount)}</td>
+    </tr>
+  `).join("");
+  document.getElementById("allocationTotal").textContent = fmtINR(data.summary.allocated_total);
+
+  show(document.getElementById("budgetResults"));
+
+  if (allocationChart) allocationChart.destroy();
+  const palette = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#4a3aa7", "#008300", "#e34948"];
+  allocationChart = new Chart(document.getElementById("allocationChart"), {
+    type: "doughnut",
+    data: {
+      labels: data.rows.map(r => r.channel),
+      datasets: [{
+        data: data.rows.map(r => r.amount),
+        backgroundColor: data.rows.map((_, i) => palette[i % palette.length]),
+        borderColor: "#fcfcfb",
+        borderWidth: 2,
+      }],
+    },
+    options: { responsive: true, plugins: { legend: { position: "bottom" } } },
+  });
+
+  const noticeEl = document.getElementById("allocationNotice");
+  noticeEl.innerHTML = `<strong>How to read this:</strong><ul>${data.notice.map(n => `<li>${n}</li>`).join("")}</ul>` +
+    `<p style="margin:8px 0 0;">Reconciles with entered budget: <strong>${data.summary.reconciles ? "yes" : "no"}</strong></p>`;
+});
+
+// ---------------- CSV download ----------------
+document.getElementById("downloadCsvBtn").addEventListener("click", () => {
+  if (!lastAllocationRows) return;
+  const header = "channel,attribution_weight_pct,allocated_amount_inr\n";
+  const lines = lastAllocationRows.map(r => `${r.channel},${r.attribution_weight_pct},${r.amount}`);
+  const csv = header + lines.join("\n") + "\n";
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "budget_allocation.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
